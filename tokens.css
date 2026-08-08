@@ -1,0 +1,90 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   TOKENS COMPARTIDOS — @nyro-ai/ui
+   Fuente única de los 14 tokens que las dos apps (nyro-erp y gm-erp) tienen en
+   común. Antes vivían duplicados en el index.css de cada una, y ya habían
+   empezado a separarse: --critical-text se arregló en un lado y no en el otro.
+
+   CÓMO SE USA
+     import '@nyro-ai/ui/tokens.css';   // ANTES del index.css de la app
+   La app puede seguir definiendo tokens propios después; lo que declare gana,
+   porque va más abajo en la cascada.
+
+   LO QUE NO ESTÁ AQUÍ, A PROPÓSITO
+   Los remaps de la paleta cruda de Tailwind (.text-gray-500, .bg-gray-50…) son
+   compensaciones de cada app y NO se comparten: nyro-erp remapea `slate` sin
+   !important y gm-erp remapea `gray` con !important. Meter esa capa aquí es lo
+   que produjo el fallo de foco del dealer — el !important mataba los
+   `focus:border-*`. Este archivo declara valores; no impone utilidades.
+
+   EL DESDOBLE SUPERFICIE / TEXTO
+   Cada color semántico tiene dos tokens porque son dos papeles. `--primary` es
+   SUPERFICIE (bg-primary, border-primary/20) y no cambia con el tema.
+   `--primary-text` es TEXTO y sí cambia, porque un teal pálido pensado para
+   fondo oscuro cae a 1.38:1 sobre fondo claro. Igual para juice, warning y
+   critical. Romper ese desdoble es reintroducir el fallo de contraste.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+/* ── TEMA OSCURO (por defecto) ───────────────────────────────────────────────
+   Las apps arrancan en oscuro; `light` se activa con data-theme en <html>. */
+:root {
+  /* Que los controles nativos (scrollbars, selects, autofill) sigan al tema.
+     Va con los tokens y no en cada app porque es parte del mismo contrato:
+     declarar el tema sin esto deja inputs blancos sobre una app oscura. */
+  color-scheme: dark;
+
+  /* Acento de la plataforma. Tono del logo de Nyro (hue 177.6).
+     Cambiar el color de las dos apps = editar estas dos líneas. */
+  --primary: 127 227 223;            /* #7FE3DF */
+  --primary-dark: 82 217 212;        /* #52D9D4 */
+
+  /* El acento como TEXTO. En oscuro coincide con la superficie; en claro no. */
+  --primary-text: 127 227 223;       /* #7FE3DF */
+  --primary-text-hover: 82 217 212;  /* #52D9D4 */
+
+  /* Tinta que va ENCIMA del acento (text-ink sobre bg-primary). NO sigue al
+     tema a propósito: el teal es claro en los DOS temas, así que lo que lleva
+     encima tiene que ser oscuro en los dos. Si el acento pasara a ser un color
+     oscuro, esta es la única línea que habría que tocar. */
+  --on-primary: 11 15 13;
+
+  /* Verde de éxito: pagado, activo, conciliado. */
+  --juice: 43 176 160;               /* #2BB0A0 — superficie */
+  --juice-text: 43 176 160;          /* #2BB0A0 — texto */
+
+  /* Semánticos como TEXTO. Las superficies (bg-warning/10, border-critical/20)
+     salen del preset con el hex saturado; ahí el saturado es el correcto. */
+  --warning-text: 255 122 47;        /* #FF7A2F */
+  /* Un pelo más claro que la superficie (#FF4D4D): como texto casi siempre cae
+     sobre su propio tinte, y ahí el saturado se queda al filo de AA. */
+  --critical-text: 255 107 107;      /* #FF6B6B */
+
+  /* Fondos. */
+  --base: 11 15 13;                  /* #0B0F0D — página */
+  --base-alt: 14 19 17;              /* #0E1311 — paneles, menús */
+  --surface: 21 27 24;               /* #151B18 — tarjetas */
+
+  /* Elevación de tarjeta como token, no como utilidad suelta, para que una
+     tarjeta pese igual en las dos apps. */
+  --card-shadow: 0 1px 2px rgba(0, 0, 0, 0.4), 0 8px 24px rgba(0, 0, 0, 0.45);
+  --card-shadow-hover: 0 10px 30px rgba(0, 0, 0, 0.28), 0 4px 10px rgba(0, 0, 0, 0.22);
+}
+
+/* ── TEMA CLARO ──────────────────────────────────────────────────────────────
+   Solo voltean los tokens de TEXTO y los fondos. El acento como superficie se
+   queda igual: es el mismo teal en los dos temas, y por eso --on-primary
+   tampoco cambia. */
+:root[data-theme='light'] {
+  color-scheme: light;
+  --primary-text: 13 117 112;        /* #0D7570 — 4.74:1 sobre la página */
+  --primary-text-hover: 11 97 92;    /* #0B615C */
+  --juice-text: 26 110 98;           /* #1A6E62 — 6.09:1 sobre el tinte del badge */
+  --warning-text: 165 75 11;         /* #A54B0B — 5.02:1 */
+  --critical-text: 192 38 38;        /* #C02626 — 4.98:1 */
+
+  --base: 244 245 244;               /* #F4F5F4 */
+  --base-alt: 255 255 255;
+  --surface: 255 255 255;
+
+  --card-shadow: 0 1px 2px rgba(15, 23, 20, 0.05), 0 8px 24px rgba(15, 23, 20, 0.07);
+  --card-shadow-hover: 0 10px 30px rgba(15, 23, 20, 0.10), 0 4px 10px rgba(15, 23, 20, 0.06);
+}
