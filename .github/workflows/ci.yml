@@ -1,0 +1,47 @@
+name: CI
+
+# Este paquete lo consumen las dos apps a la vez: un cambio que rompa aquí las
+# rompe a las dos. Tipos y compilación en cada push y cada PR.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  comprobar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Comprobar tipos
+        run: npm run typecheck
+
+      - name: Compilar
+        run: npm run build
+
+      - name: El paquete tiene que llevar lo que dice que lleva
+        # `npm pack` respeta la lista `files` del package.json. Si alguien añade
+        # un archivo nuevo y olvida incluirlo, aquí se ve antes de publicar y no
+        # después, cuando la app que lo instala falla al importar.
+        run: |
+          npm pack --silent >/dev/null
+          TGZ="$(ls -1 *.tgz | head -1)"
+          echo "Contenido de $TGZ:"
+          tar -tzf "$TGZ" | sed 's|^package/|  |' | sort
+          for f in package/tokens.css package/preset.js package/dist/index.js package/dist/index.d.ts; do
+            if ! tar -tzf "$TGZ" | grep -qx "$f"; then
+              echo "::error::Falta $f en el tarball. Revisa la lista \`files\` del package.json."
+              exit 1
+            fi
+          done
+          echo "Los cuatro puntos de entrada están."
