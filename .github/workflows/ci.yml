@@ -26,6 +26,17 @@ jobs:
       - name: Comprobar tipos
         run: npm run typecheck
 
+      - name: Contraste de los tokens
+        # El README manda medir el contraste en los dos temas antes de tocar
+        # tokens.css. Esto lo hace cumplir: un cambio de color que baje de AA
+        # (4.5:1) para en el PR, no en las dos apps a la vez.
+        run: npm run contraste
+
+      - name: Tests
+        # useDialogA11y es la pieza con lógica que no se ve en un typecheck:
+        # contador de diálogos, inert de hermanos, trampa de foco.
+        run: npm test
+
       - name: Compilar
         run: npm run build
 

@@ -25,7 +25,7 @@ system: es el suelo común.
 |---|---|
 | `@nyro-ai/ui/tokens.css` | Los 14 tokens compartidos, tema oscuro y claro |
 | `@nyro-ai/ui/preset` | Preset de Tailwind: colores, desdoble superficie/texto, fuentes, sombras |
-| `useDialogA11y` | Trampa de foco, Escape, bloqueo de scroll con contador, `inert` del fondo |
+| `useDialogA11y` | Trampa de foco, Escape, bloqueo de scroll con contador, `inert` del fondo ⚠️ |
 | `useMediaQuery` | Suscripción a un media query, SSR-safe |
 | `createTheme(clave)` | Tema claro/oscuro; la clave de localStorage la pone cada app |
 
@@ -70,6 +70,23 @@ import { createTheme } from '@nyro-ai/ui';
 export const { getTheme, setTheme, toggleTheme } = createTheme('nyro_theme');
 ```
 
+## ⚠️ `useDialogA11y` exige un `onClose` estable
+
+Hoy `onClose` está en las dependencias del efecto. Una flecha inline le da
+identidad nueva en cada render del padre, el efecto se remonta y **el foco
+salta al primer campo del diálogo**: quien esté escribiendo en el tercero
+vuelve al primero en cuanto algo re-renderiza arriba.
+
+```tsx
+<Modal onClose={() => setOpen(false)} />          // ✗ salta el foco
+const cerrar = useCallback(() => setOpen(false), []);
+<Modal onClose={cerrar} />                        // ✓
+```
+
+Está reproducido en `test/useDialogA11y.test.tsx` con `it.fails`, así que el
+día que se arregle dentro del hook el test se pone rojo y avisa de que toca
+quitar tanto el `.fails` como esta sección.
+
 ## Lo que NO está aquí, a propósito
 
 **Los remaps de la paleta cruda de Tailwind.** `nyro-erp` remapea `slate` sin
@@ -97,13 +114,22 @@ el fallo de contraste que costó todo un audit.
 
 ## Publicar
 
+Lo publica GitHub Actions al empujar el tag. No hace falta ningún token: el
+workflow usa el `GITHUB_TOKEN` del propio repo.
+
 ```bash
-npm version patch      # o minor / major
-npm publish
+npm version patch      # o minor / major — crea el commit y el tag
+git push --follow-tags
 ```
 
-Hace falta un token con **`write:packages`**. El token de trabajo habitual
-(`gist, read:org, repo, workflow`) **no sirve**.
+El workflow comprueba que el tag y la versión del `package.json` coinciden, que
+esa versión no está publicada ya, y pasa tipos, contraste, tests y build antes
+de publicar.
+
+**No corras `npm publish` a mano.** Además de necesitar un PAT con
+`write:packages` (el token de trabajo habitual —`gist, read:org, repo,
+workflow`— no lo tiene), dejaría la versión publicada y el workflow del tag
+fallaría después con «ya existe».
 
 Para que las apps puedan instalarlo, tanto en local como en CI (Cloudflare
 Pages / Vercel), hace falta `NODE_AUTH_TOKEN` con `read:packages` y un `.npmrc`
