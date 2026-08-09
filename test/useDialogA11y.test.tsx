@@ -197,19 +197,12 @@ describe('fondo inerte', () => {
 });
 
 describe('estabilidad de onClose', () => {
-  // BUG CONOCIDO — pinchado aquí a propósito con `it.fails`.
-  //
-  // El efecto lleva `onClose` en sus dependencias. Si la app pasa una flecha
-  // inline (`onClose={() => setOpen(false)}`, que es como se usa en las dos),
-  // cada render del padre le da una identidad nueva, el efecto se limpia y se
-  // vuelve a montar, y el remontaje reposiciona el foco en el primer enfocable.
-  // Efecto visible: el usuario que está escribiendo en el tercer campo salta al
-  // primero en cuanto algo re-renderiza el padre.
-  //
-  // `it.fails` deja el test en verde MIENTRAS el bug siga ahí, y lo pone en
-  // rojo el día que alguien lo arregle — momento de borrar el `.fails` y este
-  // comentario. Ni CI en rojo ni un bug sin registrar.
-  it.fails('un re-render con onClose inline no debería mover el foco', () => {
+  // La regresión que este bloque cuida: `onClose` estuvo en las dependencias
+  // del efecto que monta el fondo inerte y coloca el foco. Como las dos apps lo
+  // pasan como flecha inline, cada render del padre lo remontaba y devolvía el
+  // foco al primer campo — el usuario que escribía en el tercero saltaba al
+  // primero. Ahora ese efecto depende solo de `open` y el teclado va aparte.
+  it('un re-render con onClose inline no mueve el foco', () => {
     function App() {
       return (
         <Dialogo open onClose={() => {}}>
@@ -225,6 +218,53 @@ describe('estabilidad de onClose', () => {
 
     rerender(<App />); // nueva identidad de onClose → el efecto se remonta
     expect(document.activeElement).toBe(medio);
+  });
+
+  it('un re-render con onClose inline no toca el fondo inerte', () => {
+    function App() {
+      return (
+        <div>
+          <aside data-testid="fondo">
+            <button>Del fondo</button>
+          </aside>
+          <Dialogo open onClose={() => {}}>{campos}</Dialogo>
+        </div>
+      );
+    }
+    const { rerender } = render(<App />);
+    const fondo = screen.getByTestId('fondo') as HTMLElement & { inert?: boolean };
+    expect(fondo.inert).toBe(true);
+
+    // Mirar el estado FINAL aquí no sirve de nada: el código viejo destapaba y
+    // volvía a tapar dentro del mismo commit, así que al terminar el rerender
+    // `inert` valía true igual y el test no podía fallar. Lo que distingue a los
+    // dos es el churn, no el resultado — de ahí el observador.
+    // `takeRecords()` y no el callback: MutationObserver entrega en microtask y
+    // esto tiene que leerse sincrónicamente.
+    const obs = new MutationObserver(() => {});
+    obs.observe(fondo, { attributes: true, attributeFilter: ['aria-hidden'] });
+
+    rerender(<App />);
+
+    const registros = obs.takeRecords();
+    obs.disconnect();
+    expect(registros).toHaveLength(0);
+    expect(fondo.inert).toBe(true);
+  });
+
+  // La otra cara del arreglo: sacar onClose de un efecto no puede dejarlo
+  // congelado en el primero que se pasó. El efecto del teclado sí lo lleva en
+  // sus dependencias justamente para esto.
+  it('Escape llama al onClose más reciente, no al del primer render', () => {
+    const viejo = vi.fn();
+    const nuevo = vi.fn();
+    const { rerender } = render(<Dialogo open onClose={viejo}>{campos}</Dialogo>);
+
+    rerender(<Dialogo open onClose={nuevo}>{campos}</Dialogo>);
+    fireEvent.keyDown(document, { key: 'Escape' });
+
+    expect(nuevo).toHaveBeenCalledTimes(1);
+    expect(viejo).not.toHaveBeenCalled();
   });
 
   it('con onClose estable, un re-render deja el foco donde estaba', () => {
