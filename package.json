@@ -37,7 +37,7 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "contraste": "node scripts/contraste.mjs",
-    "prepublishOnly": "npm run build"
+    "prepare": "npm run build"
   },
   "peerDependencies": {
     "react": ">=18",
