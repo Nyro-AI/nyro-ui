@@ -13,6 +13,18 @@ import { useEffect, useRef } from 'react';
 let abiertos = 0;
 let overflowPrevio = '';
 
+// Los enfocables vivos del diálogo, en orden de tabulación. Vive fuera del hook
+// porque no depende de nada suyo: así los dos efectos de abajo la comparten sin
+// que ninguno tenga que llevarla en sus dependencias.
+function enfocables(el: HTMLElement | null): HTMLElement[] {
+  if (!el) return [];
+  return Array.from(
+    el.querySelectorAll<HTMLElement>(
+      'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',
+    ),
+  ).filter((n) => n.offsetParent !== null);
+}
+
 // Genérico en el tipo de elemento: el panel no siempre es un <div> — en el
 // dealer varios modales cuelgan de un <form>, y una ref de HTMLDivElement ahí
 // no compila. Por defecto sigue siendo div, así que quien no lo necesite no
@@ -36,6 +48,15 @@ export function useDialogA11y<T extends HTMLElement = HTMLDivElement>(open: bool
     };
   }, [open]);
 
+  // Fondo inerte, foco inicial y devolución del foco al cerrar.
+  //
+  // Las dependencias son SOLO `open`, y eso es la mitad del trabajo de este
+  // efecto. Llevar aquí `onClose` era un bug: las apps lo pasan como flecha
+  // inline (`onClose={() => setOpen(false)}`), que tiene identidad nueva en cada
+  // render del padre, así que el efecto se limpiaba y se volvía a montar sin que
+  // el diálogo hubiera cambiado — y el remontaje devolvía el foco al abridor y
+  // lo reponía en el primer enfocable. Quien estuviera escribiendo en el tercer
+  // campo saltaba al primero en cuanto algo re-renderizaba arriba.
   useEffect(() => {
     if (!open) return;
     const el = ref.current;
@@ -64,23 +85,27 @@ export function useDialogA11y<T extends HTMLElement = HTMLDivElement>(open: bool
       }
     }
 
-    const focusables = (): HTMLElement[] =>
-      el
-        ? Array.from(
-            el.querySelectorAll<HTMLElement>(
-              'a[href],button:not([disabled]),input:not([disabled]),select:not([disabled]),textarea:not([disabled]),[tabindex]:not([tabindex="-1"])',
-            ),
-          ).filter((n) => n.offsetParent !== null)
-        : [];
+    enfocables(el)[0]?.focus();
 
-    focusables()[0]?.focus();
+    return () => {
+      for (const x of inertados) { x.inert = false; x.removeAttribute('aria-hidden'); }
+      opener?.focus?.(); // devuelve el foco al abridor
+    };
+  }, [open]);
+
+  // El teclado va en su propio efecto porque es lo único que necesita el
+  // `onClose` de este render: si el de arriba lo llevara, el diálogo entero se
+  // remontaría cada vez que cambia. Aquí re-colgar el listener es gratis — no
+  // toca el DOM del diálogo ni mueve el foco.
+  useEffect(() => {
+    if (!open) return;
 
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
         onClose();
       } else if (e.key === 'Tab') {
-        const f = focusables();
+        const f = enfocables(ref.current);
         if (!f.length) return;
         const first = f[0];
         const last = f[f.length - 1];
@@ -95,11 +120,7 @@ export function useDialogA11y<T extends HTMLElement = HTMLDivElement>(open: bool
     };
 
     document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      for (const x of inertados) { x.inert = false; x.removeAttribute('aria-hidden'); }
-      opener?.focus?.(); // devuelve el foco al abridor
-    };
+    return () => document.removeEventListener('keydown', onKey);
   }, [open, onClose]);
 
   return ref;

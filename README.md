@@ -25,7 +25,7 @@ system: es el suelo común.
 |---|---|
 | `@nyro-ai/ui/tokens.css` | Los 14 tokens compartidos, tema oscuro y claro |
 | `@nyro-ai/ui/preset` | Preset de Tailwind: colores, desdoble superficie/texto, fuentes, sombras |
-| `useDialogA11y` | Trampa de foco, Escape, bloqueo de scroll con contador, `inert` del fondo ⚠️ |
+| `useDialogA11y` | Trampa de foco, Escape, bloqueo de scroll con contador, `inert` del fondo |
 | `useMediaQuery` | Suscripción a un media query, SSR-safe |
 | `createTheme(clave)` | Tema claro/oscuro; la clave de localStorage la pone cada app |
 
@@ -70,22 +70,17 @@ import { createTheme } from '@nyro-ai/ui';
 export const { getTheme, setTheme, toggleTheme } = createTheme('nyro_theme');
 ```
 
-## ⚠️ `useDialogA11y` exige un `onClose` estable
+## `useDialogA11y` no pide nada al `onClose`
 
-Hoy `onClose` está en las dependencias del efecto. Una flecha inline le da
-identidad nueva en cada render del padre, el efecto se remonta y **el foco
-salta al primer campo del diálogo**: quien esté escribiendo en el tercero
-vuelve al primero en cuanto algo re-renderiza arriba.
+Pásalo como te salga, flecha inline incluida. No hace falta `useCallback`.
 
-```tsx
-<Modal onClose={() => setOpen(false)} />          // ✗ salta el foco
-const cerrar = useCallback(() => setOpen(false), []);
-<Modal onClose={cerrar} />                        // ✓
-```
-
-Está reproducido en `test/useDialogA11y.test.tsx` con `it.fails`, así que el
-día que se arregle dentro del hook el test se pone rojo y avisa de que toca
-quitar tanto el `.fails` como esta sección.
+El hook parte el trabajo en tres efectos a propósito, y solo el del teclado
+depende de `onClose`. El del fondo inerte y el foco depende **solo de `open`**:
+cuando ese efecto llevaba también `onClose`, una flecha inline lo remontaba en
+cada render del padre y el foco saltaba al primer campo — quien escribía en el
+tercero volvía al primero en cuanto algo re-renderizaba arriba. Los dos casos
+están cubiertos en `test/useDialogA11y.test.tsx`, y los dos fallan si alguien
+vuelve a juntar los efectos.
 
 ## Lo que NO está aquí, a propósito
 
