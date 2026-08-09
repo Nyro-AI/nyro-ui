@@ -40,6 +40,12 @@ jobs:
       - name: Comprobar tipos
         run: npm run typecheck
 
+      - name: Contraste de los tokens
+        run: npm run contraste
+
+      - name: Tests
+        run: npm test
+
       - name: Compilar
         run: npm run build
 
