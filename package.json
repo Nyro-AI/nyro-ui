@@ -24,9 +24,7 @@
     "./preset": "./preset.js",
     "./package.json": "./package.json"
   },
-  "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
-  },
+  "private": true,
   "repository": {
     "type": "git",
     "url": "git+https://github.com/Nyro-AI/nyro-ui.git"

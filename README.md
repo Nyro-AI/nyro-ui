@@ -31,11 +31,14 @@ system: es el suelo común.
 
 ## Cómo se usa
 
-**1. Instalar** (requiere un token con `read:packages`, ver abajo):
+**1. Instalar** desde el tag de git — este paquete no está en ningún registro:
 
 ```bash
-npm install @nyro-ai/ui
+npm install "git+https://github.com/Nyro-AI/nyro-ui.git#v0.1.3"
 ```
+
+Siempre un tag, nunca una rama: `#main` te instala lo que hubiera ese día y
+convierte el lockfile en una promesa que no se cumple.
 
 **2. Los tokens**, arriba del `index.css` de la app — un `@import` de CSS tiene
 que preceder a cualquier regla:
@@ -107,33 +110,49 @@ Un teal pálido pensado para fondo oscuro cae a 1.38:1 sobre fondo claro. Lo
 mismo para `juice`, `warning` y `critical`. Romper el desdoble es reintroducir
 el fallo de contraste que costó todo un audit.
 
-## Publicar
+## Sacar una versión
 
-Lo publica GitHub Actions al empujar el tag. No hace falta ningún token: el
-workflow usa el `GITHUB_TOKEN` del propio repo.
+No hay `npm publish` ni registro: el tag **es** la versión.
 
 ```bash
 npm version patch      # o minor / major — crea el commit y el tag
 git push --follow-tags
 ```
 
-El workflow comprueba que el tag y la versión del `package.json` coinciden, que
-esa versión no está publicada ya, y pasa tipos, contraste, tests y build antes
-de publicar.
+Después, en cada app, subir el tag al que apunta:
 
-**No corras `npm publish` a mano.** Además de necesitar un PAT con
-`write:packages` (el token de trabajo habitual —`gist, read:org, repo,
-workflow`— no lo tiene), dejaría la versión publicada y el workflow del tag
-fallaría después con «ya existe».
-
-Para que las apps puedan instalarlo, tanto en local como en CI (Cloudflare
-Pages / Vercel), hace falta `NODE_AUTH_TOKEN` con `read:packages` y un `.npmrc`
-con:
-
+```bash
+npm install "git+https://github.com/Nyro-AI/nyro-ui.git#v0.1.4"
 ```
-@nyro-ai:registry=https://npm.pkg.github.com
-//npm.pkg.github.com/:_authToken=${NODE_AUTH_TOKEN}
+
+Eso reescribe el `package-lock.json`, que fija el SHA exacto — el tag es la
+etiqueta, el lockfile es el contrato.
+
+**`prepare` y no `prepublishOnly`.** `dist/` no está versionado, así que al
+instalar desde git lo que llega es el fuente y npm tiene que compilarlo: eso lo
+hace `prepare`, que sí corre en instalaciones desde git. Cambiarlo de vuelta
+deja a las dos apps instalando un paquete sin `dist`.
+
+**Los imports relativos de `src/index.ts` llevan `.js`.** Es la resolución ESM
+de Node, que no adivina extensiones. Sin ellas, el paquete instalado no resuelve.
+
+## Instalar desde un repo privado
+
+`Nyro-AI/nyro-ui` es privado, y npm normaliza cualquier URL de github.com a
+`git+ssh://` en el lockfile — no se puede evitar desde el `package.json`. En
+local no se nota porque tu git ya tiene credenciales; en un runner o en un
+build de Cloudflare/Vercel, no hay clave SSH y el clone falla.
+
+La salida es reescribir esa URL a https con token, antes del `npm ci`:
+
+```bash
+git config --global url."https://x-access-token:$NYRO_UI_TOKEN@github.com/".insteadOf "ssh://git@github.com/"
+git config --global url."https://x-access-token:$NYRO_UI_TOKEN@github.com/".insteadOf "git@github.com:"
 ```
+
+`NYRO_UI_TOKEN` tiene que ser un PAT con **`repo`**. El `GITHUB_TOKEN` de otro
+repo **no sirve**: está scopeado a su propio repo y no lee otro privado ni
+siendo de la misma org.
 
 ## Compatibilidad
 
