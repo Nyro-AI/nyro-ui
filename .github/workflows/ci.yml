@@ -15,6 +15,18 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  # Dos empujones seguidos dejaban los dos runs corriendo a la vez, compitiendo
+  # por los mismos minutos. Este grupo cancela el anterior en las ramas de PR,
+  # donde solo importa el último commit.
+  #
+  # En main y en los tags NO cancela: el sha entra en el nombre del grupo, así
+  # que cada uno tiene grupo propio y se valida entero. Aquí eso importa el
+  # doble, porque el tag ES el artefacto que instalan las dos apps: un tag sin
+  # comprobar es un paquete publicado sin comprobar.
+  group: ${{ github.workflow }}-${{ github.ref }}-${{ github.event_name == 'push' && github.sha || '' }}
+  cancel-in-progress: true
+
 jobs:
   comprobar:
     runs-on: ubuntu-latest
