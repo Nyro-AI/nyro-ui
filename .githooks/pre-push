@@ -1,0 +1,204 @@
+#!/usr/bin/env bash
+# pre-push — corre en local lo mismo que el CI de GitHub (.github/workflows/ci.yml).
+#
+# POR QUÉ EXISTE: este paquete es el suelo de las dos apps y **el tag es el
+# artefacto**. No hay registro que haga de aduana: las apps instalan desde
+# `git+https://github.com/Nyro-AI/nyro-ui.git#vX.Y.Z`. En el momento en que el
+# tag sale, ya es instalable; el CI lo comprueba DESPUÉS, cuando el artefacto
+# malo ya está publicado y cualquier `npm install` de las dos apps se lo lleva.
+# Por eso la comprobación de tag/versión tiene que pasar ANTES del push. Este
+# razonamiento no depende de la salud del CI: valdría igual con Actions
+# perfecto.
+#
+# ESTADO DE ACTIONS (a 2026-09-12): CAÍDO en toda la organización por minutos
+# agotados, confirmado por el dueño en la página de facturación. `startup_failure`
+# a los 0s tan recientes como HOY: run 34711699615 de **Nyro-AI/nyro-core**,
+# 2026-09-12T18:36:14Z, sha 1ce5020. En ese mismo repo los `startup_failure` se
+# reanudan el 2026-08-25 y no han parado; nyro-owner, nyro-web, gm-erp,
+# nyro-retail y nyro-servicios están igual.
+#
+# **Nyro-AI/nyro-ui no tiene ninguno reciente, y eso NO es salud: es que no se
+# empuja nada desde el 2026-08-08.** Cero fallos sin pushes es ausencia de
+# muestras, no un CI que funcione. El único run verde de este repo —el
+# 31292161181, sha ffc052d, encolado el 2026-08-09 y ejecutado el 2026-08-12 al
+# restablecerse la facturación de entonces, 10 pasos en 22s— es de una
+# recuperación que duró hasta el 2026-08-22 y se acabó.
+#
+# LOS DOS ESTADOS, para no tener que reescribir esto:
+#   · Mientras dure el bloqueo de minutos, este hook es LA ÚNICA RED de este
+#     repo. Lo que pase de aquí no lo comprueba nada más.
+#   · Cuando Actions vuelva, pasa a ser LA COMPUERTA: para el push antes de
+#     salir y el CI queda de detector. Sigue haciendo falta por lo del tag.
+#
+# Y no des por bueno ninguno de los dos estados por lo que diga este
+# encabezado. El del hook de nyro-core decía «Actions ya vuelve» porque alguien
+# miró un repo un día verde; trece días después estaba caído otra vez y el
+# texto seguía igual. Comprueba tú, en varios repos y mirando las FECHAS:
+#   gh run list --repo Nyro-AI/nyro-core --limit 20
+#
+# Instalación (una vez por clon; los hooks no viajan en el repo):
+#   git config core.hooksPath .githooks
+#
+# Saltarlo en un apuro:  git push --no-verify
+set -uo pipefail
+
+# git invoca los hooks con GIT_DIR, GIT_INDEX_FILE y GIT_WORK_TREE apuntando al
+# repo actual. Con eso puesto, `git worktree add` falla, y el hook cae al árbol
+# de trabajo sin darse cuenta: justo lo que viene a evitar.
+unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX
+
+RAIZ="$(git rev-parse --show-toplevel)"
+cd "$RAIZ"
+fallo=0
+AREA=""      # worktree temporal donde se valida
+
+paso() {
+  local nombre="$1"; shift
+  printf '  %-38s' "$nombre"
+  local ini=$SECONDS salida
+  if salida=$("$@" 2>&1); then
+    echo "ok  ($((SECONDS-ini))s)"
+  else
+    echo "FALLA ($((SECONDS-ini))s)"
+    echo "$salida" | tail -25 | sed 's/^/      /'
+    fallo=1
+  fi
+}
+
+echo "pre-push · $(basename "$RAIZ")  (corre en local lo que corre el CI)"
+
+# ── Leer del stdin lo que se EMPUJA ──────────────────────────────────────
+# git alimenta el hook con una línea por ref: "<ref local> <sha local> <ref
+# remoto> <sha remoto>". De ahí salen dos cosas:
+#
+#   1. el commit a validar, para no validar el directorio de trabajo — si no,
+#      un archivo a medias que no tiene nada que ver tumba el push del commit
+#      que sí está bien;
+#   2. los tags `vX.Y.Z` que van en este push, que es lo que de verdad no puede
+#      esperar al CI (ver la comprobación de versión más abajo).
+#
+# Con stdin vacío no hay nada que validar por commit — pasa cuando git ya sabe
+# que el push no procede, por ejemplo si el remoto se movió. Se avisa en vez de
+# validar el directorio en silencio, porque el fallo que saldría no sería del
+# commit y manda a buscar donde no es.
+ultimo_sha=""
+tags_empujados=()
+while read -r ref_local sha_local _ _; do
+  [ -z "${sha_local:-}" ] && continue
+  case "$sha_local" in 0000000*) continue ;; esac   # borrado de rama o de tag
+  case "$ref_local" in
+    refs/tags/*) tags_empujados+=("${ref_local#refs/tags/}:$sha_local") ;;
+    *)           ultimo_sha="$sha_local" ;;
+  esac
+done
+
+# Un `git push --tags`, o un `git push origin vX.Y.Z`, no empuja rama ninguna:
+# solo llegan líneas de tag. En ese caso se valida el commit al que apunta el
+# tag, que es exactamente el árbol que las apps van a instalar.
+if [ -z "$ultimo_sha" ] && [ ${#tags_empujados[@]} -gt 0 ]; then
+  ultimo_sha="${tags_empujados[0]#*:}"
+fi
+
+if [ -z "$ultimo_sha" ]; then
+  echo "  · AVISO: git no pasó ninguna ref por stdin."
+  echo "    Suele ser que el remoto se movió y el push no procede. Comprueba"
+  echo "    'git log --oneline main..origin/main' antes de pelearte con esto."
+  echo "    Se valida el directorio de trabajo, que puede fallar por cosas tuyas."
+else
+  AREA="$(mktemp -d)/wt"
+fi
+
+# Worktree y no clon: no necesita red y tarda milisegundos.
+# Un tag anotado es un objeto propio, no el commit: se pela con ^{commit} antes
+# de nada, que si no el worktree se pide con un sha que no es el que se dice.
+sha_validado="$(git rev-parse -q --verify "${ultimo_sha:-HEAD}^{commit}" 2>/dev/null || echo "$ultimo_sha")"
+
+if [ -n "$AREA" ] && git worktree add --detach -q "$AREA" "$sha_validado" 2>/dev/null; then
+  limpiar_area() { git worktree remove --force "$AREA" >/dev/null 2>&1; }
+  trap limpiar_area EXIT
+  # El worktree nace sin node_modules y `npm ci` aquí tardaría más que todas las
+  # comprobaciones juntas. Se enlazan los del clon: basta para resolver módulos.
+  # Lo que esto NO cubre es un cambio de dependencias en package.json — eso solo
+  # lo ve el `npm ci` del CI, y es la razón de que el CI siga haciendo falta.
+  [ -d "$RAIZ/node_modules" ] && ln -s "$RAIZ/node_modules" "$AREA/node_modules"
+  cd "$AREA"
+  echo "  · validando ${sha_validado:0:8}, no el directorio de trabajo"
+elif [ -n "$ultimo_sha" ]; then
+  echo "  · AVISO: no pude crear el worktree; valido el directorio de trabajo"
+fi
+
+# ── El tag y la versión del package.json tienen que coincidir ────────────
+# Este es EL paso. En el CI solo corre en tags (`if: startsWith(github.ref,
+# 'refs/tags/v')`) y corre tarde: para cuando falla, el tag ya está en GitHub y
+# las dos apps ya lo pueden instalar. Aquí para el push.
+#
+# Si el tag dice v0.1.4 y el package.json dice 0.1.3, las apps instalan un
+# paquete que se presenta con otra versión que la que pidieron: el lockfile
+# cuadra, el `npm ls` miente, y nadie lo ve hasta que toca depurar por qué un
+# arreglo "ya está" y no está.
+#
+# Cada tag se compara contra el package.json de SU PROPIO commit y no contra el
+# worktree: un `git push --tags` puede llevar varios tags de una, y un tag no
+# tiene por qué apuntar a la punta de la rama que se está empujando.
+comprobar_tag() {
+  local nombre="$1" sha="$2" pkg
+  pkg="$(git -C "$RAIZ" show "${sha}^{commit}:package.json" \
+        | node -p "JSON.parse(require('fs').readFileSync(0,'utf8')).version")" || return 1
+  if [ "${nombre#v}" != "$pkg" ]; then
+    echo "El tag dice $nombre y package.json dice $pkg. Corrige uno de los dos."
+    echo "El tag ES el artefacto: no hay registro donde arreglarlo después."
+    return 1
+  fi
+  echo "Versión $pkg, coincide con el tag."
+}
+
+for entrada in ${tags_empujados[@]+"${tags_empujados[@]}"}; do
+  nombre_tag="${entrada%%:*}"
+  sha_tag="${entrada#*:}"
+  case "$nombre_tag" in
+    # Solo los tags de versión son artefacto; cualquier otro tag no se toca.
+    v[0-9]*) paso "tag $nombre_tag cuadra con package.json" comprobar_tag "$nombre_tag" "$sha_tag" ;;
+  esac
+done
+
+# Los tipos son el contrato que ven las dos apps al importar: lo que rompe aquí
+# rompe su `tsc`, no el nuestro.
+paso "comprobar tipos" npm run typecheck
+
+# El README manda medir el contraste en los dos temas antes de tocar tokens.css.
+# Esto lo hace cumplir: un cambio de color que baje de AA (4.5:1) para aquí, no
+# en las dos apps a la vez.
+paso "contraste de los tokens" npm run contraste
+
+# useDialogA11y es la pieza con lógica que no se ve en un typecheck: contador de
+# diálogos, inert de hermanos, trampa de foco.
+paso "tests" npm test
+
+# El `dist/` publicado sale de aquí; si no compila, no hay paquete.
+paso "compilar" npm run build
+
+# `npm pack` respeta la lista `files` del package.json. Si alguien añade un
+# archivo nuevo y olvida incluirlo, se ve aquí y no cuando la app que lo instala
+# falla al importar. Los cuatro puntos de entrada son los del campo `exports`.
+comprobar_tarball() {
+  local tgz
+  npm pack --silent >/dev/null || return 1
+  tgz="$(ls -1 ./*.tgz | head -1)"
+  echo "Contenido de $tgz:"
+  tar -tzf "$tgz" | sed 's|^package/|  |' | sort
+  for f in package/tokens.css package/preset.js package/dist/index.js package/dist/index.d.ts; do
+    if ! tar -tzf "$tgz" | grep -qx "$f"; then
+      echo "Falta $f en el tarball. Revisa la lista \`files\` del package.json."
+      return 1
+    fi
+  done
+  echo "Los cuatro puntos de entrada están."
+}
+paso "el paquete lleva lo que dice" comprobar_tarball
+
+echo
+if [ "$fallo" -ne 0 ]; then
+  echo "push abortado. Arregla lo de arriba, o 'git push --no-verify' si sabes lo que haces."
+  exit 1
+fi
+echo "todo bien, empujando."
