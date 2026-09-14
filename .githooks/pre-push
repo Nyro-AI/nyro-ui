@@ -48,6 +48,11 @@ set -uo pipefail
 unset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE GIT_PREFIX
 
 RAIZ="$(git rev-parse --show-toplevel)"
+# El CLON principal. Si esto corre desde un worktree secundario (una sesión de
+# agente, o un `git push` desde `git worktree`), RAIZ es ese worktree y ahí NO
+# está node_modules: está ignorado y vive en el clon. `--git-common-dir` apunta
+# al .git compartido; su padre es el clon.
+CLON="$(dirname "$(cd "$RAIZ" && git rev-parse --path-format=absolute --git-common-dir 2>/dev/null || echo "$RAIZ/.git")")"
 cd "$RAIZ"
 fallo=0
 AREA=""      # worktree temporal donde se valida
@@ -120,7 +125,12 @@ if [ -n "$AREA" ] && git worktree add --detach -q "$AREA" "$sha_validado" 2>/dev
   # comprobaciones juntas. Se enlazan los del clon: basta para resolver módulos.
   # Lo que esto NO cubre es un cambio de dependencias en package.json — eso solo
   # lo ve el `npm ci` del CI, y es la razón de que el CI siga haciendo falta.
-  [ -d "$RAIZ/node_modules" ] && ln -s "$RAIZ/node_modules" "$AREA/node_modules"
+  # Se prueban los dos sitios: el árbol actual primero, el clon después. Sin lo
+  # segundo, un push desde un worktree se saltaba TODAS las comprobaciones de
+  # interfaz sin que el worktree tuviera la culpa.
+  for _nm in "$RAIZ/node_modules" "$CLON/node_modules"; do
+    [ -d "$_nm" ] && { ln -s "$_nm" "$AREA/node_modules"; break; }
+  done
   cd "$AREA"
   echo "  · validando ${sha_validado:0:8}, no el directorio de trabajo"
 elif [ -n "$ultimo_sha" ]; then
