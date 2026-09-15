@@ -35,7 +35,18 @@ jobs:
 
       - uses: actions/setup-node@v4
         with:
-          node-version: 20
+          # 22 y no 20: vitest 5 declara `engines` como
+          # `^22.12.0 || ^24.0.0 || >=26.0.0`, y Node 20 queda FUERA de ese rango.
+          # Se subió al pasar a vitest 5 para cerrar la cadena esbuild → vite →
+          # vitest (2026-09-15).
+          #
+          # Qué se comprobó y qué no: el rango sale de leer el `engines` del
+          # vitest instalado. NO se ejecutó la suite sobre Node 20 —en esta máquina
+          # no hay uno— así que no puedo afirmar si npm lo rechaza o solo avisa.
+          # Con Actions caído por el impago, esto tampoco se pondría rojo solo:
+          # correr el CI en una versión que el paquete declara no soportar es
+          # apostar, y no hay nadie que cobre la apuesta hasta que vuelva la cuenta.
+          node-version: 22
           cache: npm
 
       - run: npm ci
