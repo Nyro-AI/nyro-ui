@@ -11,6 +11,17 @@ on:
     branches: [main]
     tags: ['v*']
   pull_request:
+  # A mano, sin tener que empujar nada.
+  #
+  # Faltaba, y se notó el 2026-09-16: al volver Actions tras el corte del
+  # 2026-08-09 había que saber si `main` estaba verde en los siete repos, y en
+  # este no se podía averiguar sin ensuciar el historial con un commit de humo.
+  # Cuatro de los siete tenían el mismo hueco.
+  #
+  # Importa más aquí que en otros: este paquete no pasa por ningún registro que
+  # haga de aduana —las apps instalan desde `git+https://…#vX.Y.Z`— así que poder
+  # comprobar un tag a mano, sin empujar, es la única aduana que hay.
+  workflow_dispatch:
 
 permissions:
   contents: read
