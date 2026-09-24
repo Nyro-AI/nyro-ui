@@ -1,0 +1,116 @@
+/* ─────────────────────────────────────────────────────────────────────────────
+   FUENTES COMPARTIDAS — @nyro-ai/ui
+   Las dos familias que `preset.js` declara en `fontFamily` (Inter para el
+   cuerpo, Poppins para los titulares), auto-hospedadas dentro del paquete.
+
+   POR QUÉ ESTÁ AQUÍ Y NO EN CADA APP
+   Estos @font-face vivían solo en el index.css de nyro-erp. Las otras apps de
+   la línea nunca se enteraron: el preset les prometía `font-sans` y
+   `font-display`, el navegador no encontraba ninguna de las dos familias y caía
+   al sans del sistema SIN un solo error en consola. Medido con la app
+   corriendo: `document.fonts.size` daba 0. Es la misma deriva que tokens.css
+   existe para evitar, una capa más arriba.
+
+   CÓMO SE USA
+     @import '@nyro-ai/ui/tokens.css';
+     @import '@nyro-ai/ui/fonts.css';   // junto a los tokens, ANTES de @tailwind
+   Los dos son @import, y en CSS los @import tienen que preceder a cualquier
+   otra regla. Por eso se importa esta hoja en vez de copiar los @font-face al
+   index.css de la app: un @font-face por encima de los @import de Tailwind los
+   invalida en silencio y el build se cae con "@layer base is used but no
+   matching @tailwind base".
+
+   POR QUÉ AUTO-HOSPEDADAS Y NO Google Fonts
+   Medido en nyro-erp (Lighthouse mobile sobre el build de producción): el
+   `@import url(https://fonts.googleapis.com/...)` encadenaba DOS saltos
+   serializados a terceros antes del primer pixel — 1673 ms hasta el CSS de
+   Google, 645 ms más hasta el woff2 — con la app entera ya descargada a los
+   70 ms. Desde el mismo origen queda UN salto, sin DNS ni TLS extra.
+
+   LAS RUTAS SON RELATIVAS (`./fonts/…`) Y NO ABSOLUTAS
+   Dentro de un paquete, `/fonts/…` apunta a la raíz del sitio que lo consume,
+   donde no hay nada. Relativas, el bundler de la app resuelve el woff2 contra
+   este archivo y lo emite como un asset suyo.
+
+   LOS FICHEROS
+   Los woff2 están en `fonts/` (bajados de fonts.gstatic.com, licencia OFL) y
+   los lista `files` en package.json — si no, el paquete se publica sin ellos y
+   revienta en el consumidor, no aquí. Inter es VARIABLE: sus dos entradas
+   cubren 400–600 con un solo archivo, no es un copy-paste de más.
+   `unicode-range` parte latin de latin-ext, así que los 85 KB de Inter latin-ext
+   no se bajan para escribir «Clientes». `font-display: swap` deja que el texto
+   pinte con la fuente del sistema y cambie al llegar la real, en vez de quedar
+   invisible. Actualizarlas es volver a bajar los woff2 a mano.
+   ───────────────────────────────────────────────────────────────────────────── */
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('./fonts/inter-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Inter';
+  font-style: normal;
+  font-weight: 400 600;
+  font-display: swap;
+  src: url('./fonts/inter-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fonts/poppins-500-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 500;
+  font-display: swap;
+  src: url('./fonts/poppins-500-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./fonts/poppins-600-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 600;
+  font-display: swap;
+  src: url('./fonts/poppins-600-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fonts/poppins-700-latin.woff2') format('woff2');
+  unicode-range: U+0000-00FF, U+0131, U+0152-0153, U+02BB-02BC, U+02C6, U+02DA, U+02DC, U+0304, U+0308, U+0329, U+2000-206F, U+20AC, U+2122, U+2191, U+2193, U+2212, U+2215, U+FEFF, U+FFFD;
+}
+
+@font-face {
+  font-family: 'Poppins';
+  font-style: normal;
+  font-weight: 700;
+  font-display: swap;
+  src: url('./fonts/poppins-700-latin-ext.woff2') format('woff2');
+  unicode-range: U+0100-02BA, U+02BD-02C5, U+02C7-02CC, U+02CE-02D7, U+02DD-02FF, U+0304, U+0308, U+0329, U+1D00-1DBF, U+1E00-1E9F, U+1EF2-1EFF, U+2020, U+20A0-20AB, U+20AD-20C0, U+2113, U+2C60-2C7F, U+A720-A7FF;
+}

@@ -24,6 +24,7 @@ system: es el suelo común.
 | | |
 |---|---|
 | `@nyro-ai/ui/tokens.css` | Los 14 tokens compartidos, tema oscuro y claro |
+| `@nyro-ai/ui/fonts.css` | Inter y Poppins auto-hospedadas — las dos familias que declara el preset |
 | `@nyro-ai/ui/preset` | Preset de Tailwind: colores, desdoble superficie/texto, fuentes, sombras |
 | `useDialogA11y` | Trampa de foco, Escape, bloqueo de scroll con contador, `inert` del fondo |
 | `useMediaQuery` | Suscripción a un media query, SSR-safe |
@@ -40,11 +41,12 @@ npm install "git+https://github.com/Nyro-AI/nyro-ui.git#v0.1.3"
 Siempre un tag, nunca una rama: `#main` te instala lo que hubiera ese día y
 convierte el lockfile en una promesa que no se cumple.
 
-**2. Los tokens**, arriba del `index.css` de la app — un `@import` de CSS tiene
-que preceder a cualquier regla:
+**2. Los tokens y las fuentes**, arriba del `index.css` de la app — un
+`@import` de CSS tiene que preceder a cualquier regla:
 
 ```css
 @import '@nyro-ai/ui/tokens.css';
+@import '@nyro-ai/ui/fonts.css';
 
 @tailwind base;
 @tailwind components;
@@ -53,6 +55,23 @@ que preceder a cualquier regla:
 
 Lo que la app declare después gana, así que los tokens propios de cada una
 (`--ov-*`, `--t-*`, `--bd-*` en gm-erp) siguen mandando.
+
+Las dos líneas van **juntas y las primeras**. `fonts.css` trae los `@font-face`
+de Inter y Poppins; importarla es lo que hace que `font-sans` y `font-display`
+del preset apunten a algo. Sin ella todo compila, no sale un error en consola y
+el navegador pinta con el sans del sistema — así estuvieron tres de las cuatro
+apps de la línea, con `document.fonts.size` en 0.
+
+Y por eso es un `@import` a una hoja y no los `@font-face` copiados al
+`index.css` de la app: una regla `@font-face` por encima de los imports de
+Tailwind los invalida en silencio, y el build se cae con «@layer base is used
+but no matching @tailwind base».
+
+Para que las fuentes no lleguen a mitad del arranque, un `preload` en el
+`index.html` de los tres pesos que usa la primera pantalla — Inter (variable,
+un archivo para 400–600) y Poppins 600/700. La ruta es la que el bundler emite
+para un asset dentro de `node_modules`, así que hay que sacarla del build y no
+escribirla a mano: un preload a una URL que no existe baja el fichero dos veces.
 
 **3. El preset**, en `tailwind.config.js`:
 
@@ -132,6 +151,12 @@ etiqueta, el lockfile es el contrato.
 instalar desde git lo que llega es el fuente y npm tiene que compilarlo: eso lo
 hace `prepare`, que sí corre en instalaciones desde git. Cambiarlo de vuelta
 deja a las dos apps instalando un paquete sin `dist`.
+
+**Un archivo que no esté en `files` no viaja.** `dist/`, `src/`, `preset.js`,
+`tokens.css`, `fonts.css` y `fonts/`: lo que se deje fuera de esa lista se
+instala vacío en las apps y falla allí, no aquí. Un woff2 nuevo hay que añadirlo
+al `@font-face` **y** comprobar que `fonts/` sigue listado —
+`test/fonts.test.ts` falla si alguna de las dos cosas se queda a medias.
 
 **Los imports relativos de `src/index.ts` llevan `.js`.** Es la resolución ESM
 de Node, que no adivina extensiones. Sin ellas, el paquete instalado no resuelve.
