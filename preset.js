@@ -67,6 +67,12 @@ export default {
         critical: 'rgb(var(--critical-text) / <alpha-value>)',
       },
 
+      // Las dos familias las sirve `@nyro-ai/ui/fonts.css`, auto-hospedadas
+      // dentro del paquete. Si la app no importa esa hoja, esto compila igual y
+      // `font-sans`/`font-display` siguen existiendo, pero el navegador no
+      // encuentra ninguna de las dos y cae al sans del sistema SIN un error en
+      // consola. Ese silencio es lo que tuvo a tres de las cuatro apps de la
+      // línea sin tipografía hasta que alguien miró `document.fonts.size`.
       fontFamily: {
         sans: ['Inter', 'sans-serif'],
         display: ['Poppins', 'sans-serif'],
